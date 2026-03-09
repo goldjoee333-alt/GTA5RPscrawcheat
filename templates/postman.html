@@ -1,0 +1,153 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="card" style="padding: 15px;">
+    <h2 style="font-size: 1.3rem; margin-bottom: 10px;">🚚 Почтальон</h2>
+    <div class="info-box" style="border-left-color: #ff0000; padding: 8px; margin-bottom: 10px; font-size: 0.85rem;">
+        ℹ️ <strong>Функция:</strong> Автоезда (W+Shift+0) + поиск post.png + клик ЛКМ.
+    </div>
+
+    <div class="settings-group" style="padding: 10px; margin-bottom: 10px;">
+        {% if not template_exists %}
+        <div style="background: rgba(255, 0, 0, 0.2); border: 1px solid #ff0000; padding: 8px; border-radius: 5px; margin-bottom: 10px; font-size: 0.8rem;">
+            <span style="color: #ff0000;">⚠️ Шаблон post.png не найден!</span><br>
+            <span style="color: #ff8888;">Путь: {{ template_path }}</span>
+        </div>
+        {% endif %}
+
+        <!-- Кнопка ручной автоезды -->
+        <button class="button" id="auto-drive-btn" onclick="toggleDrive()" style="width: 100%; margin-bottom: 10px;">🚗 Автоезда</button>
+
+        <!-- Уверенность распознавания -->
+        <div class="input-group" style="margin-bottom: 8px;">
+            <label style="font-size: 0.8rem; min-width: 120px;">Уверенность: <span id="confidence-v" style="color: #ff0000;">{{ settings.confidence|default(0.7) }}</span></label>
+            <input type="range" id="confidence" min="0.5" max="0.95" step="0.05" value="{{ settings.confidence|default(0.7) }}" style="width: 100%;">
+        </div>
+
+        <!-- Кулдаун после клика -->
+        <div class="input-group" style="margin-bottom: 8px;">
+            <label style="font-size: 0.8rem; min-width: 120px;">Пауза после клика: <span id="click-cooldown-v" style="color: #ff0000;">{{ settings.click_cooldown|default(2.5) }}</span> сек</label>
+            <input type="range" id="click-cooldown" min="1.0" max="5.0" step="0.1" value="{{ settings.click_cooldown|default(2.5) }}" style="width: 100%;">
+        </div>
+
+        <!-- Кнопка запуска/остановки автоматического режима -->
+        <button class="button" id="postman-btn" onclick="toggleBot()" style="background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%); padding: 10px; font-size: 0.9rem;">
+            {{ 'ОСТАНОВИТЬ' if active else 'ЗАПУСТИТЬ АВТОРЕЖИМ' }}
+        </button>
+    </div>
+
+    <div class="stats-box" style="background: rgba(255, 0, 0, 0.1); border: 1px solid rgba(255, 0, 0, 0.3); padding: 8px; border-radius: 8px; margin-top: 5px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;">
+            <span style="color: #ff0000; font-weight: bold;">🖱️ Кликов:</span>
+            <span id="counter-value" style="color: white;">{{ counter }}</span>
+        </div>
+    </div>
+
+    <h2 style="font-size: 1.1rem; margin-top: 10px;">📋 Логи</h2>
+    <div id="log-container" style="height: 120px;"></div>
+</div>
+
+<!-- Скрытый элемент с данными из Flask -->
+<div id="postman-data"
+     data-confidence="{{ settings.confidence|default(0.7) }}"
+     data-click-cooldown="{{ settings.click_cooldown|default(2.5) }}"
+     data-active="{{ 'true' if active else 'false' }}"
+     data-counter="{{ counter }}"
+     data-drive="{{ 'true' if auto_drive_active else 'false' }}"
+     style="display: none;"></div>
+
+<script>
+let isToggling = false;
+const dataElement = document.getElementById('postman-data');
+
+// Чтение начальных данных
+let confidence = parseFloat(dataElement.dataset.confidence);
+let clickCooldown = parseFloat(dataElement.dataset.clickCooldown);
+let active = dataElement.dataset.active === 'true';
+let counter = parseInt(dataElement.dataset.counter);
+let driveActive = dataElement.dataset.drive === 'true';
+
+// Установка начальных значений
+document.getElementById('confidence').value = confidence;
+document.getElementById('confidence-v').innerText = confidence;
+document.getElementById('click-cooldown').value = clickCooldown;
+document.getElementById('click-cooldown-v').innerText = clickCooldown;
+document.getElementById('counter-value').innerText = counter;
+updateDriveButton(driveActive);
+updateBotButton(active);
+
+function updateDriveButton(state) {
+    const btn = document.getElementById('auto-drive-btn');
+    btn.style.background = state ? '#2ecc71' : '#8b0000';
+    btn.innerText = state ? '🚗 Автоезда' : '🚗 Автоезда';
+}
+
+function updateBotButton(state) {
+    const btn = document.getElementById('postman-btn');
+    btn.innerText = state ? 'ОСТАНОВИТЬ' : 'ЗАПУСТИТЬ АВТОРЕЖИМ';
+}
+
+function toggleDrive() {
+    fetch('/api/postman/control', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: 'toggle_drive'})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.drive_active !== undefined) {
+            driveActive = data.drive_active;
+            updateDriveButton(driveActive);
+        }
+    })
+    .catch(err => console.error(err));
+}
+
+function toggleBot() {
+    const action = active ? 'stop_bot' : 'start_bot';
+    fetch('/api/postman/control', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: action})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.active !== undefined) {
+            active = data.active;
+            updateBotButton(active);
+            if (data.counter !== undefined) {
+                document.getElementById('counter-value').innerText = data.counter;
+            }
+        }
+    })
+    .catch(err => console.error(err));
+}
+
+function saveSettings() {
+    const settings = {
+        confidence: parseFloat(document.getElementById('confidence').value),
+        click_cooldown: parseFloat(document.getElementById('click-cooldown').value)
+    };
+    fetch('/api/postman/settings', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(settings)
+    }).catch(err => console.error('Error saving settings:', err));
+}
+
+document.getElementById('confidence').addEventListener('input', function() {
+    document.getElementById('confidence-v').innerText = this.value;
+});
+document.getElementById('confidence').addEventListener('change', saveSettings);
+
+document.getElementById('click-cooldown').addEventListener('input', function() {
+    document.getElementById('click-cooldown-v').innerText = this.value;
+});
+document.getElementById('click-cooldown').addEventListener('change', saveSettings);
+
+if (typeof window.loadModuleLogs === 'function') {
+    window.loadModuleLogs('postman');
+} else {
+    console.warn('loadModuleLogs не определена');
+}
+</script>
+{% endblock %}

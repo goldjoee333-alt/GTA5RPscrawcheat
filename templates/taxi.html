@@ -1,0 +1,86 @@
+{% extends "layout.html" %} {% block content %}
+<div class="card">
+    <h2>🚕 Такси</h2>
+    <div class="info-box" style="border-left-color: #ff0000;">
+        ℹ️ <strong>Функция:</strong> Автоматически ищет значок такси на экране и нажимает E для принятия заказа.
+    </div>
+
+    <div class="settings-group">
+        {% if not template_exists %}
+        <div style="background: rgba(255, 0, 0, 0.2); border: 1px solid #ff0000; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+            <span style="color: #ff0000;">⚠️ Шаблон taxi.png не найден в static/assets/taxi/</span>
+        </div>
+        {% endif %}
+
+        <div class="input-group">
+            <label>Интервал сканирования: <span id="scan-interval-v" style="color: #ff0000;">{{ settings.scan_interval }}</span> сек</label>
+            <input type="range" id="scan-interval" min="0.05" max="0.5" step="0.05" value="{{ settings.scan_interval }}" oninput="document.getElementById('scan-interval-v').innerText = this.value">
+        </div>
+
+        <div class="input-group">
+            <label>Уверенность: <span id="confidence-v" style="color: #ff0000;">{{ settings.confidence }}</span></label>
+            <input type="range" id="confidence" min="0.5" max="0.95" step="0.05" value="{{ settings.confidence }}" oninput="document.getElementById('confidence-v').innerText = this.value">
+        </div>
+
+        <button class="button" id="taxi-btn" onclick="toggleTaxi()" style="background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%);">
+            {{ 'ОСТАНОВИТЬ' if active else 'ЗАПУСТИТЬ' }}
+        </button>
+    </div>
+
+    <div class="stats-box" style="background: rgba(255, 0, 0, 0.1); border: 1px solid rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px; margin-top: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #ff0000; font-weight: bold;">🚕 Принято заказов:</span>
+            <span id="counter-value" style="color: white; font-size: 1.5rem;">{{ counter }}</span>
+        </div>
+    </div>
+
+    <h2>📋 Логи</h2>
+    <div style="position: relative;">
+        <div id="log-container"></div>
+        <button onclick="sendLogsToTelegram()" class="floating-send-btn" title="Отправить в Telegram" style="color: #ff0000; border-color: rgba(255, 0, 0, 0.2);">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+    </div>
+</div>
+
+<script>
+    function toggleTaxi() {
+        const settings = {
+            scan_interval: parseFloat(document.getElementById('scan-interval').value),
+            confidence: parseFloat(document.getElementById('confidence').value)
+        };
+
+        fetch('/api/taxi/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    settings: settings
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.active !== undefined) {
+                    const btn = document.getElementById('taxi-btn');
+                    btn.innerText = data.active ? 'ОСТАНОВИТЬ' : 'ЗАПУСТИТЬ';
+                }
+            })
+            .catch(err => console.error('Ошибка:', err));
+    }
+
+    function updateCounter() {
+        fetch('/api/taxi/stats')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('counter-value').textContent = data.counter;
+            })
+            .catch(err => console.error('Ошибка обновления счетчика:', err));
+    }
+
+    window.loadModuleLogs('taxi');
+    setInterval(updateCounter, 2000);
+</script>
+{% endblock %}

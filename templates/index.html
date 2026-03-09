@@ -1,0 +1,43 @@
+{% extends "layout.html" %} {% block content %}
+<div class="card">
+    <h2>🏠 Главная</h2>
+    <div class="info-box" style="border-left-color: #ff0000;">
+        ℹ️ <strong>SCRawCheat</strong> — автоматизация для GTA 5 RP
+    </div>
+
+    <div class="feature-list">
+        <h3 style="color: #ff0000;">📋 Доступные модули:</h3>
+        <ul>
+            <li>🚢 Порт — автопоиск мини-игры, нажатие E</li>
+            <li>🧵 Деморган — швейка и токарь (OpenCV)</li>
+            <li>🍳 Кулинария — авто-готовка по рецептам</li>
+            <li>🏋️ Качалка — поиск кругов, авто-еда</li>
+            <li>🐄 Коровы — сравнение шаблонов A/D</li>
+            <li>🚕 Такси — автопринятие заказов</li>
+            <li>⛏️ Стройка — распознавание картинок</li>
+            <li>📬 Почтальон - нажатие мыши и автоезда</li>
+            <li>💤 Anti-AFK — нажатие клавиш</li>
+            <li>EMS Helper - Скоро...</li>
+        </ul>
+    </div>
+
+    <div class="bottom-info">
+        <div class="bottom-left">
+            <div class="btn-row">
+                <a href="https://t.me/scrawcheat" target="_blank" class="link-btn" style="border-color: rgba(255, 0, 0, 0.2); color: #ff0000;">
+                    📱 Telegram channel
+                </a>
+                <a href="https://t.me/scrawmudr0" target="_blank" class="link-btn" style="border-color: rgba(255, 0, 0, 0.2); color: #ff0000;">
+                    💬 Telegram
+                </a>
+            </div>
+        </div>
+        <div class="bottom-right">
+            <div class="version-badge">
+                <span class="version-icon">⚡</span>
+                <span class="version-label">SCRawCheat v{{ version }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

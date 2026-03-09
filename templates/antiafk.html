@@ -1,0 +1,75 @@
+{% extends "layout.html" %} {% block content %}
+<div class="card">
+    <h2>🕹️ Anti-AFK</h2>
+    <div class="info-box" style="border-left-color: #ff0000;">
+        ℹ️ <strong>Функция:</strong> Автоматически имитирует активность пользователя, чтобы избежать выхода по бездействию. Эмулирует движения геймпада.
+    </div>
+
+    <div class="settings-group">
+        <div class="input-group">
+            <label>Мин. зажатие: <span id="min_d_v" style="color: #ff0000;">{{ settings.min_delay }}</span> сек</label>
+            <input type="range" id="min_delay" min="0.5" max="5" step="0.1" value="{{ settings.min_delay }}" oninput="document.getElementById('min_d_v').innerText = this.value">
+        </div>
+
+        <div class="input-group">
+            <label>Макс. зажатие: <span id="max_d_v" style="color: #ff0000;">{{ settings.max_delay }}</span> сек</label>
+            <input type="range" id="max_delay" min="0.5" max="5" step="0.1" value="{{ settings.max_delay }}" oninput="document.getElementById('max_d_v').innerText = this.value">
+        </div>
+
+        <div class="input-group">
+            <label>Мин. пауза: <span id="min_p_v" style="color: #ff0000;">{{ settings.min_pause }}</span> сек</label>
+            <input type="range" id="min_pause" min="1" max="60" step="1" value="{{ settings.min_pause }}" oninput="document.getElementById('min_p_v').innerText = this.value">
+        </div>
+
+        <div class="input-group">
+            <label>Макс. пауза: <span id="max_p_v" style="color: #ff0000;">{{ settings.max_pause }}</span> сек</label>
+            <input type="range" id="max_pause" min="1" max="60" step="1" value="{{ settings.max_pause }}" oninput="document.getElementById('max_p_v').innerText = this.value">
+        </div>
+
+        <button class="button" id="antiafk-btn" onclick="toggleAntiAFK()" style="background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%);">
+            {{ 'ОСТАНОВИТЬ' if active else 'ЗАПУСТИТЬ' }}
+        </button>
+    </div>
+
+    <h2>📋 Логи</h2>
+    <div style="position: relative;">
+        <div id="log-container"></div>
+        <button onclick="sendLogsToTelegram()" class="floating-send-btn" title="Отправить в Telegram" style="color: #ff0000; border-color: rgba(255, 0, 0, 0.2);">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+    </div>
+</div>
+
+<script>
+    function toggleAntiAFK() {
+        const settings = {
+            min_delay: parseFloat(document.getElementById('min_delay').value),
+            max_delay: parseFloat(document.getElementById('max_delay').value),
+            min_pause: parseFloat(document.getElementById('min_pause').value),
+            max_pause: parseFloat(document.getElementById('max_pause').value)
+        };
+
+        fetch('/api/antiafk/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    settings: settings
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.active !== undefined) {
+                    const btn = document.getElementById('antiafk-btn');
+                    btn.innerText = data.active ? 'ОСТАНОВИТЬ' : 'ЗАПУСТИТЬ';
+                }
+            })
+            .catch(err => console.error('Ошибка:', err));
+    }
+
+    window.loadModuleLogs('antiafk');
+</script>
+{% endblock %}

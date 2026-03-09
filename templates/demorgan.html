@@ -1,0 +1,135 @@
+{% extends "layout.html" %} {% block content %}
+<div class="card">
+    <h2>⛓️ Деморган</h2>
+    <div class="info-box" style="border-left-color: #ff0000;">
+        ℹ️ <strong>Функция:</strong> Автоматически ищет токаря и швейку, вычисляет время ожидания и выполняет клики.
+    </div>
+
+    <div class="settings-group">
+        <!-- Кнопка автобега -->
+        <button class="button" id="auto-run-btn" onclick="toggleAutoRun()" style="width: 100%; margin-bottom: 15px;">
+            🚶 Автобег: ...
+        </button>
+
+        <div class="input-group">
+            <label style="color: #ff0000;">Режим:</label>
+            <select id="mode-select" class="input-text">
+                <option value="швейка" {% if settings.mode == 'швейка' %}selected{% endif %}>Швейка</option>
+                <option value="токарь" {% if settings.mode == 'токарь' %}selected{% endif %}>Токарь</option>
+            </select>
+        </div>
+
+        <div class="input-group">
+            <label>Интервал кликов: <span id="click-interval-v" style="color: #ff0000;">{{ settings.click_interval }}</span> сек</label>
+            <input type="range" id="click-interval" min="0.1" max="1.0" step="0.05" value="{{ settings.click_interval }}" oninput="document.getElementById('click-interval-v').innerText = this.value">
+        </div>
+
+        <div class="input-group">
+            <label>Пауза токаря: <span id="tokar-pause-v" style="color: #ff0000;">{{ settings.tokar_pause }}</span> сек</label>
+            <input type="range" id="tokar-pause" min="30" max="120" step="1" value="{{ settings.tokar_pause }}" oninput="document.getElementById('tokar-pause-v').innerText = this.value">
+        </div>
+
+        <div class="input-group">
+            <label>Пауза швейки: <span id="shveika-pause-v" style="color: #ff0000;">{{ settings.shveika_pause }}</span> сек</label>
+            <input type="range" id="shveika-pause" min="60" max="150" step="1" value="{{ settings.shveika_pause }}" oninput="document.getElementById('shveika-pause-v').innerText = this.value">
+        </div>
+
+        <button class="button" id="demorgan-btn" onclick="toggleDemorgan()" style="background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%);">
+            {{ 'ОСТАНОВИТЬ' if active else 'ЗАПУСТИТЬ' }}
+        </button>
+    </div>
+
+    <div class="stats-box" style="background: rgba(255, 0, 0, 0.1); border: 1px solid rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px; margin-top: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #ff0000; font-weight: bold;">🔨 Действий:</span>
+            <span id="counter-value" style="color: white; font-size: 1.5rem;">{{ counter }}</span>
+        </div>
+    </div>
+
+    <h2>📋 Логи</h2>
+    <div style="position: relative;">
+        <div id="log-container"></div>
+        <button onclick="sendLogsToTelegram()" class="floating-send-btn" title="Отправить в Telegram" style="color: #ff0000; border-color: rgba(255, 0, 0, 0.2);">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+    </div>
+</div>
+
+<!-- Скрытый элемент с данными для синхронизации состояния -->
+<div id="demorgan-data" 
+     data-auto-run-active="{{ 'true' if auto_run_active else 'false' }}"
+     style="display: none;"></div>
+
+<script>
+    function updateAutoRunButton(state) {
+        const btn = document.getElementById('auto-run-btn');
+        if (btn) {
+            btn.style.background = state ? '#2ecc71' : '#8b0000';
+            btn.innerText = state ? '🚶 Автобег: ВКЛ' : '🚶 Автобег: ВЫКЛ';
+        }
+    }
+
+    function toggleDemorgan() {
+        const settings = {
+            mode: document.getElementById('mode-select').value,
+            click_interval: parseFloat(document.getElementById('click-interval').value),
+            tokar_pause: parseInt(document.getElementById('tokar-pause').value),
+            shveika_pause: parseInt(document.getElementById('shveika-pause').value)
+        };
+
+        fetch('/api/demorgan/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    settings: settings
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.active !== undefined) {
+                    const btn = document.getElementById('demorgan-btn');
+                    btn.innerText = data.active ? 'ОСТАНОВИТЬ' : 'ЗАПУСТИТЬ';
+                }
+            })
+            .catch(err => console.error('Ошибка:', err));
+    }
+
+    function toggleAutoRun() {
+        fetch('/api/demorgan/auto_run/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.auto_run_active !== undefined) {
+                    updateAutoRunButton(data.auto_run_active);
+                }
+            })
+            .catch(err => console.error('Ошибка:', err));
+    }
+
+    function updateCounter() {
+        fetch('/api/demorgan/stats')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('counter-value').textContent = data.counter;
+            })
+            .catch(err => console.error('Ошибка обновления счетчика:', err));
+    }
+
+    window.loadModuleLogs('demorgan');
+    setInterval(updateCounter, 2000);
+
+    const dataElement = document.getElementById('demorgan-data');
+    if (dataElement) {
+        const autoRunStatus = dataElement.dataset.autoRunActive === 'true';
+        updateAutoRunButton(autoRunStatus);
+    }
+</script>
+{% endblock %}

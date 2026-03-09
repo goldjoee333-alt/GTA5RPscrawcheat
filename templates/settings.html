@@ -1,0 +1,187 @@
+{% extends "layout.html" %} {% block content %}
+<div class="card">
+    <h2>⚙️ Настройки</h2>
+
+    <!-- БЛОК С ИНФОРМАЦИЕЙ О ПРОЦЕССАХ GTA -->
+    <div class="settings-group">
+        <h3 style="color: #ff0000;">🎮 GTA 5 / RAGE MP</h3>
+        <div id="gta-processes" style="background: rgba(255, 0, 0, 0.1); border: 1px solid rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="color: #ff0000; font-weight: bold;">Статус окна:</span>
+                <span id="gta-window-status" style="color: #ff0000;">Проверка...</span>
+            </div>
+            <div style="margin-top: 10px;">
+                <span style="color: #ff0000; font-weight: bold;">Найденные процессы:</span>
+                <div id="gta-processes-list" style="margin-top: 5px; color: white;"></div>
+            </div>
+            <button class="button" style="background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%); padding: 8px 16px; width: auto; margin-top: 10px;" onclick="refreshGTAStatus()">
+                🔄 Обновить
+            </button>
+        </div>
+    </div>
+
+    <div class="settings-group">
+        <div class="settings-item">
+            <div class="settings-header">
+                <span class="settings-title">
+                    <span class="settings-icon">🔊</span> Звук наведения на модули
+                </span>
+                <button class="toggle-switch" id="switch-hover" onclick="toggleHover()" style="border-color: rgba(255, 0, 0, 0.3);"></button>
+            </div>
+
+            <div class="slider-container{% if not settings.switch_hover %} hidden{% endif %}" id="hover-slider-container">
+                <div class="slider-row">
+                    <span class="slider-label">Громкость: <span id="hover-value" style="color: #ff0000;">{{settings.volume_hover}}</span></span>
+                    <div class="slider-wrapper">
+                        <input type="range" id="volume-hover" class="slider" min="0" max="100" value="{{settings.volume_hover}}" oninput="document.getElementById('hover-value').innerText=this.value" style="--range-progress: 0%;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-item">
+            <div class="settings-header">
+                <span class="settings-title">
+                    <span class="settings-icon">🔔</span> Звук клика по модулям
+                </span>
+                <button class="toggle-switch" id="switch-click" onclick="toggleClick()" style="border-color: rgba(255, 0, 0, 0.3);"></button>
+            </div>
+
+            <div class="slider-container{% if not settings.switch_click %} hidden{% endif %}" id="click-slider-container">
+                <div class="slider-row">
+                    <span class="slider-label">Громкость: <span id="click-value" style="color: #ff0000;">{{settings.volume_click}}</span></span>
+                    <div class="slider-wrapper">
+                        <input type="range" id="volume-click" class="slider" min="0" max="100" value="{{settings.volume_click}}" oninput="document.getElementById('click-value').innerText=this.value" style="--range-progress: 0%;">
+                    </div>
+                </div>
+            </div>
+        </div>
+<script>
+    function refreshGTAStatus() {
+        fetch('/api/gta/status')
+            .then(res => res.json())
+            .then(data => {
+                const statusEl = document.getElementById('gta-window-status');
+                if (data.active) {
+                    statusEl.textContent = 'АКТИВНО';
+                    statusEl.style.color = '#00ff00';
+                } else {
+                    statusEl.textContent = 'НЕ АКТИВНО';
+                    statusEl.style.color = '#ff0000';
+                }
+
+                const listEl = document.getElementById('gta-processes-list');
+                if (data.count > 0) {
+                    let html = '';
+                    data.processes.forEach(proc => {
+                        html += `<div style="padding: 5px; border-bottom: 1px solid rgba(255,0,0,0.2);">📌 ${proc.name} (PID: ${proc.pid})</div>`;
+                    });
+                    listEl.innerHTML = html;
+                } else {
+                    listEl.innerHTML = '<div style="color: #888;">Процессы не найдены</div>';
+                }
+            })
+            .catch(err => {
+                console.error('Ошибка получения статуса GTA:', err);
+            });
+    }
+
+    (function() {
+        let localSettings = JSON.parse('{{ settings | tojson | safe }}');
+        const card = document.querySelector('.card');
+
+        const updateUIConfig = () => {
+            if (window.UI_CONFIG) {
+                window.UI_CONFIG.hoverEnabled = localSettings.switch_hover;
+                window.UI_CONFIG.clickEnabled = localSettings.switch_click;
+                window.UI_CONFIG.hoverVol = localSettings.volume_hover / 100;
+                window.UI_CONFIG.clickVol = localSettings.volume_click / 100;
+                window.UI_CONFIG.background = localSettings.background;
+            }
+        };
+
+        card.addEventListener('click', (e) => {
+            const sw = e.target.closest('.toggle-switch');
+            if (!sw) return;
+
+            const key = sw.id.replace('switch-', 'switch_');
+            localSettings[key] = !localSettings[key];
+            updateUIConfig();
+
+            sw.classList.toggle('active', localSettings[key]);
+            const containerId = sw.id.includes('hover') ? 'hover-slider-container' : 'click-slider-container';
+            document.getElementById(containerId).classList.toggle('hidden', !localSettings[key]);
+
+            saveToServer();
+        }, true);
+
+        card.addEventListener('input', (e) => {
+            if (!e.target.classList.contains('slider')) return;
+
+            const isHover = e.target.id === 'volume-hover';
+            const val = parseInt(e.target.value);
+            const key = isHover ? 'volume_hover' : 'volume_click';
+            const displayId = isHover ? 'hover-value' : 'click-value';
+
+            localSettings[key] = val;
+            document.getElementById(displayId).textContent = val;
+            updateUIConfig();
+        }, true);
+
+        card.addEventListener('change', (e) => {
+            if (e.target.classList.contains('slider')) saveToServer();
+        })
+
+        const saveToServer = () => {
+            updateUIConfig();
+
+            fetch('/api/settings/save', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(localSettings)
+            }).catch(err => console.error('Ошибка сохранения:', err));
+        };
+
+        document.querySelectorAll('.bg-option').forEach(option => {
+            option.addEventListener('click', () => {
+                const bg = option.dataset.bg;
+                localSettings.background = bg;
+
+                document.querySelectorAll('.bg-option').forEach(o => o.classList.remove('active'));
+                option.classList.add('active');
+
+                saveToServer();
+
+                if (window.initParticles) {
+                    window.initParticles(bg);
+                }
+            });
+        });
+
+        const init = () => {
+            const swHover = document.getElementById('switch-hover');
+            const swClick = document.getElementById('switch-click');
+
+            if (swHover) swHover.classList.toggle('active', localSettings.switch_hover);
+            if (swClick) swClick.classList.toggle('active', localSettings.switch_click);
+
+            document.getElementById('hover-slider-container').classList.toggle('hidden', !localSettings.switch_hover);
+            document.getElementById('click-slider-container').classList.toggle('hidden', !localSettings.switch_click);
+
+            const activeBg = localSettings.background || 'bot';
+            document.querySelectorAll('.bg-option').forEach(o => {
+                o.classList.toggle('active', o.dataset.bg === activeBg);
+            });
+
+            // Обновляем статус GTA при загрузке
+            refreshGTAStatus();
+            // Обновляем каждые 5 секунд
+            setInterval(refreshGTAStatus, 5000);
+        };
+
+        init();
+    })();
+</script>
+{% endblock %}

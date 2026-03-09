@@ -1,0 +1,90 @@
+{% extends "layout.html" %} {% block content %}
+<div class="card">
+    <h2>🍳 Кулинария</h2>
+    <div class="info-box" style="border-left-color: #ff0000;">
+        ℹ️ <strong>Функция:</strong> Автоматически готовит выбранное блюдо, распознавая ингредиенты на экране.
+    </div>
+
+    <div class="settings-group">
+        <div class="input-group">
+            <label style="color: #ff0000;">Выберите блюдо:</label>
+            <select id="mode-select" class="input-text">
+                {% for recipe in recipes %}
+                <option value="{{ recipe }}" {% if settings.mode == recipe %}selected{% endif %}>{{ recipe }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="input-group">
+            <label>Задержка клика: <span id="click-delay-v" style="color: #ff0000;">{{ settings.click_delay }}</span> сек</label>
+            <input type="range" id="click-delay" min="0.01" max="0.5" step="0.01" value="{{ settings.click_delay }}" oninput="document.getElementById('click-delay-v').innerText = this.value">
+        </div>
+
+        <div class="input-group">
+            <label>Цикл готовки: <span id="cycle-delay-v" style="color: #ff0000;">{{ settings.cycle_delay }}</span> сек</label>
+            <input type="range" id="cycle-delay" min="1" max="10" step="0.1" value="{{ settings.cycle_delay }}" oninput="document.getElementById('cycle-delay-v').innerText = this.value">
+        </div>
+
+        <button class="button" id="cooking-btn" onclick="toggleCooking()" style="background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%);">
+            {{ 'ОСТАНОВИТЬ' if active else 'ЗАПУСТИТЬ' }}
+        </button>
+    </div>
+
+    <div class="stats-box" style="background: rgba(255, 0, 0, 0.1); border: 1px solid rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px; margin-top: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #ff0000; font-weight: bold;">🍽️ Приготовлено блюд:</span>
+            <span id="counter-value" style="color: white; font-size: 1.5rem;">{{ counter }}</span>
+        </div>
+    </div>
+
+    <h2>📋 Логи</h2>
+    <div style="position: relative;">
+        <div id="log-container"></div>
+        <button onclick="sendLogsToTelegram()" class="floating-send-btn" title="Отправить в Telegram" style="color: #ff0000; border-color: rgba(255, 0, 0, 0.2);">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+    </div>
+</div>
+
+<script>
+    function toggleCooking() {
+        const settings = {
+            mode: document.getElementById('mode-select').value,
+            click_delay: parseFloat(document.getElementById('click-delay').value),
+            cycle_delay: parseFloat(document.getElementById('cycle-delay').value)
+        };
+
+        fetch('/api/cooking/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    settings: settings
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.active !== undefined) {
+                    const btn = document.getElementById('cooking-btn');
+                    btn.innerText = data.active ? 'ОСТАНОВИТЬ' : 'ЗАПУСТИТЬ';
+                }
+            })
+            .catch(err => console.error('Ошибка:', err));
+    }
+
+    function updateCounter() {
+        fetch('/api/cooking/stats')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('counter-value').textContent = data.counter;
+            })
+            .catch(err => console.error('Ошибка обновления счетчика:', err));
+    }
+
+    window.loadModuleLogs('cooking');
+    setInterval(updateCounter, 2000);
+</script>
+{% endblock %}

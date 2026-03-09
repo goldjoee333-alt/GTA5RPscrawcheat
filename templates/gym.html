@@ -1,0 +1,124 @@
+{% extends "layout.html" %} {% block content %}
+<div class="card">
+    <h2>🏋️ Качалка</h2>
+    <div class="info-box" style="border-left-color: #ff0000;">
+        ℹ️ <strong>Функция:</strong> Распознает зеленый круг мини-игры на экране и автоматически нажимает Пробел.
+    </div>
+
+    <div class="settings-group">
+        <!-- Ползунок авто E (само еат) -->
+        <div class="settings-item">
+            <div class="settings-header">
+                <span class="settings-title">
+                    <span class="settings-icon">🍔</span> Авто E (само еат)
+                </span>
+                <button class="toggle-switch" id="auto-e-switch" onclick="toggleAutoE()" style="border-color: rgba(255, 0, 0, 0.3);"></button>
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label style="color: #ff0000;">Режим:</label>
+            <select id="mode-select" class="input-text">
+                {% for mode in modes %}
+                <option value="{{ mode }}" {% if settings.mode == mode %}selected{% endif %}>{{ mode }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="input-group">
+            <label>Интервал авто E: <span id="auto-e-interval-v" style="color: #ff0000;">{{ settings.auto_e_interval|default(5.0) }}</span> сек</label>
+            <input type="range" id="auto-e-interval" min="1" max="30" step="1" value="{{ settings.auto_e_interval|default(5.0) }}" oninput="document.getElementById('auto-e-interval-v').innerText = this.value">
+        </div>
+
+        <div class="input-group">
+            <label>Задержка пробела: <span id="space-delay-v" style="color: #ff0000;">{{ settings.space_delay }}</span> сек</label>
+            <input type="range" id="space-delay" min="0.01" max="0.2" step="0.01" value="{{ settings.space_delay }}" oninput="document.getElementById('space-delay-v').innerText = this.value">
+        </div>
+
+        <button class="button" id="gym-btn" onclick="toggleGym()" style="background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%);">
+            {{ 'ОСТАНОВИТЬ' if active else 'ЗАПУСТИТЬ' }}
+        </button>
+    </div>
+
+    <div class="stats-box" style="background: rgba(255, 0, 0, 0.1); border: 1px solid rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px; margin-top: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #ff0000; font-weight: bold;">💪 Подходов:</span>
+            <span id="counter-value" style="color: white; font-size: 1.5rem;">{{ counter }}</span>
+        </div>
+    </div>
+
+    <h2>📋 Логи</h2>
+    <div style="position: relative;">
+        <div id="log-container"></div>
+        <button onclick="sendLogsToTelegram()" class="floating-send-btn" title="Отправить в Telegram" style="color: #ff0000; border-color: rgba(255, 0, 0, 0.2);">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+    </div>
+</div>
+
+<script>
+    function toggleGym() {
+        const settings = {
+            mode: document.getElementById('mode-select').value,
+            auto_e_interval: parseFloat(document.getElementById('auto-e-interval').value),
+            space_delay: parseFloat(document.getElementById('space-delay').value)
+        };
+
+        fetch('/api/gym/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    settings: settings
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.active !== undefined) {
+                    const btn = document.getElementById('gym-btn');
+                    btn.innerText = data.active ? 'ОСТАНОВИТЬ' : 'ЗАПУСТИТЬ';
+                }
+            })
+            .catch(err => console.error('Ошибка:', err));
+    }
+
+    function toggleAutoE() {
+        fetch('/api/gym/auto_e/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.auto_e_active !== undefined) {
+                    const toggle = document.getElementById('auto-e-switch');
+                    toggle.classList.toggle('active', data.auto_e_active);
+                }
+            })
+            .catch(err => console.error('Ошибка:', err));
+    }
+
+    function updateCounter() {
+        fetch('/api/gym/stats')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('counter-value').textContent = data.counter;
+            })
+            .catch(err => console.error('Ошибка обновления счетчика:', err));
+    }
+
+    window.loadModuleLogs('gym');
+    setInterval(updateCounter, 2000);
+
+    // Устанавливаем начальное состояние ползунка
+    const autoEStatus = "{{ 'true' if auto_e_active else 'false' }}";
+    const autoEToggle = document.getElementById('auto-e-switch');
+    if (autoEToggle) {
+        autoEToggle.classList.toggle('active', autoEStatus === 'true');
+    }
+</script>
+{% endblock %}

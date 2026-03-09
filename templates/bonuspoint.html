@@ -1,0 +1,255 @@
+{% extends "layout.html" %} {% block content %}
+<div class="card">
+    <h2>🏆 Bonus Point Tracker</h2>
+    <div class="info-box" style="border-left-color: #ff0000;">
+        ℹ️ <strong>Функция:</strong> Трекер бонусных очков. Отмечайте выполненные задания и следите за прогрессом.
+    </div>
+
+    <div class="bp-header">
+        <div class="bp-total" id="bp-total" style="border-left-color: #ff0000;">BP: 0</div>
+        <div class="bp-options">
+            <label class="checkbox-label">
+                <input type="checkbox" id="vip-checkbox" class="checkbox-input">
+                <span style="color: #ff0000;">Gold / Platinum VIP</span>
+            </label>
+            <label class="checkbox-label">
+                <input type="checkbox" id="x2-checkbox" class="checkbox-input">
+                <span style="color: #ff0000;">x2 Сервер</span>
+            </label>
+        </div>
+    </div>
+
+    <div class="input-group">
+        <input type="text" id="search-input" class="input-text" placeholder="🔍 Поиск по заданиям...">
+    </div>
+
+    <div class="tasks-container" id="tasks-container"></div>
+
+    <div class="bp-buttons">
+        <button class="button" id="btn-show-add" style="background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%); width: auto; padding: 10px 20px;">➕ Добавить</button>
+        <button class="button" id="btn-show-del" style="background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%); width: auto; padding: 10px 20px;">🗑️ Удалить</button>
+        <button class="button" id="btn-clear" style="background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%); width: auto; padding: 10px 20px;">🔄 Сбросить</button>
+    </div>
+
+    <h2>📋 Логи</h2>
+    <div style="position: relative;">
+        <div id="log-container"></div>
+        <button onclick="sendLogsToTelegram()" class="floating-send-btn" title="Отправить в Telegram" style="color: #ff0000; border-color: rgba(255, 0, 0, 0.2);">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+    </div>
+</div>
+
+<!-- Модальное окно добавления -->
+<div id="add-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="border: 2px solid #ff0000;">
+        <span class="close-modal" onclick="document.getElementById('add-modal').style.display='none'">&times;</span>
+        <h3 style="color: #ff0000;">➕ Новое задание</h3>
+        <input type="text" id="add-name" class="input-text" placeholder="Название задания">
+        <input type="text" id="add-bp" class="input-text" placeholder="BP (base/vip), например 2/4">
+        <button class="button" id="btn-add-confirm" style="background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%);">Добавить</button>
+    </div>
+</div>
+
+<!-- Модальное окно удаления -->
+<div id="delete-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="border: 2px solid #ff0000;">
+        <span class="close-modal" onclick="document.getElementById('delete-modal').style.display='none'">&times;</span>
+        <h3 style="color: #ff0000;">🗑️ Удалить задание</h3>
+        <select id="delete-select" class="input-text"></select>
+        <button class="button" id="btn-del-confirm" style="background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%);">Удалить</button>
+    </div>
+</div>
+
+<script>
+    let localState = {
+        tasks: [],
+        vip: false,
+        server_x2: false
+    };
+
+    function loadAllData() {
+        Promise.all([
+                fetch('/api/bp/get_state').then(res => res.json()),
+                fetch('/api/bp/get_tasks').then(res => res.json())
+            ])
+            .then(([stateData, tasksData]) => {
+                localState.vip = stateData.vip;
+                localState.server_x2 = stateData.server_x2;
+                localState.tasks = tasksData;
+
+                document.getElementById('vip-checkbox').checked = localState.vip;
+                document.getElementById('x2-checkbox').checked = localState.server_x2;
+
+                renderTasks();
+            })
+            .catch(err => console.error('Ошибка загрузки:', err));
+    }
+
+    function renderTasks() {
+        const container = document.getElementById('tasks-container');
+        const query = document.getElementById('search-input').value.toLowerCase();
+
+        container.innerHTML = '';
+
+        localState.tasks.forEach((task, index) => {
+            if (query && !task.name.toLowerCase().includes(query)) return;
+
+            const baseBP = localState.vip ? task.vip : task.base;
+            const displayBP = localState.server_x2 ? baseBP * 2 : baseBP;
+
+            const div = document.createElement('div');
+            div.className = 'task-item';
+            div.innerHTML = `
+            <label class="task-label">
+                <input type="checkbox" class="checkbox-input" data-index="${index}" ${task.checked ? 'checked' : ''}>
+                <span class="task-name">${task.name}</span>
+                <span class="task-bp" style="background: rgba(255, 0, 0, 0.15); color: #ff0000;">${displayBP} BP</span>
+            </label>
+        `;
+            container.appendChild(div);
+        });
+
+        updateTotalBP();
+    }
+
+    function updateTotalBP() {
+        let total = 0;
+        localState.tasks.forEach(task => {
+            if (task.checked) {
+                let amount = localState.vip ? task.vip : task.base;
+                if (localState.server_x2) amount *= 2;
+                total += amount;
+            }
+        });
+        document.getElementById('bp-total').textContent = `BP: ${total}`;
+    }
+
+    document.addEventListener('change', (e) => {
+        if (e.target.id === 'vip-checkbox') {
+            localState.vip = e.target.checked;
+            fetch('/api/bp/toggle_vip', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    vip: localState.vip
+                })
+            });
+            renderTasks();
+        }
+
+        if (e.target.id === 'x2-checkbox') {
+            localState.server_x2 = e.target.checked;
+            fetch('/api/bp/toggle_x2', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    x2: localState.server_x2
+                })
+            });
+            renderTasks();
+        }
+
+        if (e.target.type === 'checkbox' && e.target.dataset.index !== undefined) {
+            const idx = e.target.dataset.index;
+            localState.tasks[idx].checked = e.target.checked;
+            updateTotalBP();
+            fetch('/api/bp/toggle_task', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    index: parseInt(idx),
+                    checked: e.target.checked
+                })
+            });
+        }
+    });
+
+    document.addEventListener('input', (e) => {
+        if (e.target.id === 'search-input') renderTasks();
+    });
+
+    document.addEventListener('click', (e) => {
+        if (e.target.id === 'btn-show-add') {
+            document.getElementById('add-modal').style.display = 'block';
+        }
+
+        if (e.target.id === 'btn-show-del') {
+            const select = document.getElementById('delete-select');
+            select.innerHTML = localState.tasks.map((t, i) => `<option value="${i}">${t.name}</option>`).join('');
+            document.getElementById('delete-modal').style.display = 'block';
+        }
+
+        if (e.target.id === 'btn-clear') {
+            fetch('/api/bp/clear_checked', {
+                    method: 'POST'
+                })
+                .then(() => loadAllData());
+        }
+
+        if (e.target.id === 'btn-add-confirm') {
+            const name = document.getElementById('add-name').value;
+            const bp = document.getElementById('add-bp').value;
+
+            if (!name || !bp.includes('/')) {
+                alert('Неверный формат!');
+                return;
+            }
+
+            fetch('/api/bp/add_task', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        bp: bp
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        document.getElementById('add-modal').style.display = 'none';
+                        loadAllData();
+                    }
+                });
+        }
+
+        if (e.target.id === 'btn-del-confirm') {
+            const idx = document.getElementById('delete-select').value;
+            fetch('/api/bp/delete_task', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        index: parseInt(idx)
+                    })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        document.getElementById('delete-modal').style.display = 'none';
+                        loadAllData();
+                    }
+                });
+        }
+
+        if (e.target.classList.contains('close-modal')) {
+            document.getElementById('add-modal').style.display = 'none';
+            document.getElementById('delete-modal').style.display = 'none';
+        }
+    });
+
+    loadAllData();
+    window.loadModuleLogs('bonuspoint');
+</script>
+{% endblock %}

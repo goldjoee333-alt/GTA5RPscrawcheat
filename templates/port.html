@@ -1,0 +1,147 @@
+{% extends "layout.html" %} {% block content %}
+<div class="card">
+    <h2>⚓ Порт</h2>
+    <div class="info-box" style="border-left-color: #ff0000;">
+        ℹ️ <strong>Функция:</strong> Автоматически сканирует экран на наличие полоски мини-игры и нажимает <strong>E</strong>.
+    </div>
+
+    <div class="stats-box" style="background: rgba(255, 0, 0, 0.1); border: 1px solid rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #ff0000; font-weight: bold;">📦 Ящиков перенесено:</span>
+            <span id="boxes-count" style="color: white; font-size: 1.5rem;">{{ stats.boxes_moved }}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+            <span style="color: #ff0000; font-weight: bold;">💰 Заработано:</span>
+            <span id="money-earned" style="color: white; font-size: 1.5rem;">{{ stats.money_earned }}$</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+            <span style="color: #ff0000; font-weight: bold;">💵 За 1 нажатие:</span>
+            <div>
+                <span id="money-per-click" style="color: white; font-size: 1.5rem; margin-right: 10px;">{{ stats.money_per_click }}$</span>
+                <button class="button" style="background: #8b0000; padding: 5px 15px; width: auto; margin: 0;" onclick="editMoneyPerClick()">✏️ Изменить</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="settings-group">
+        <!-- Кнопка автобега -->
+        <button class="button" id="auto-run-btn" onclick="toggleAutoRun()" style="width: 100%; margin-bottom: 15px;">
+            🚶 Автобег: ...
+        </button>
+
+        <button class="button" id="port-btn" onclick="togglePort()" style="background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%);">
+            {{ 'ОСТАНОВИТЬ' if active else 'ЗАПУСТИТЬ' }}
+        </button>
+    </div>
+
+    <h2>📋 Логи</h2>
+    <div style="position: relative;">
+        <div id="log-container"></div>
+        <button onclick="sendLogsToTelegram()" class="floating-send-btn" title="Отправить в Telegram" style="color: #ff0000; border-color: rgba(255, 0, 0, 0.2);">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+    </div>
+</div>
+
+<!-- Скрытый элемент с данными для синхронизации состояния -->
+<div id="port-data" 
+     data-auto-run-active="{{ 'true' if auto_run_active else 'false' }}"
+     style="display: none;"></div>
+
+<script>
+    function updateAutoRunButton(state) {
+        const btn = document.getElementById('auto-run-btn');
+        if (btn) {
+            btn.style.background = state ? '#2ecc71' : '#8b0000';
+            btn.innerText = state ? '🚶 Автобег: ВКЛ' : '🚶 Автобег: ВЫКЛ';
+        }
+    }
+
+    function editMoneyPerClick() {
+        const current = parseInt(document.getElementById('money-per-click').innerText);
+        const newAmount = prompt('Введите сумму за нажатие E:', current);
+        if (newAmount && !isNaN(newAmount)) {
+            fetch('/api/port/set_money', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    amount: parseInt(newAmount)
+                })
+            }).then(() => {
+                document.getElementById('money-per-click').innerText = newAmount + '$';
+            });
+        }
+    }
+
+    function updateStats() {
+        fetch('/api/port/stats')
+            .then(res => res.json())
+            .then(stats => {
+                document.getElementById('boxes-count').innerText = stats.boxes_moved;
+                document.getElementById('money-earned').innerText = stats.money_earned + '$';
+                document.getElementById('money-per-click').innerText = stats.money_per_click + '$';
+            });
+    }
+
+    window.togglePort = async function() {
+        try {
+            const res = await fetch('/api/port/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            const data = await res.json();
+            if (data.active !== undefined) {
+                const btn = document.getElementById('port-btn');
+                btn.innerText = data.active ? 'ОСТАНОВИТЬ' : 'ЗАПУСТИТЬ';
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    window.toggleAutoRun = async function() {
+        try {
+            const res = await fetch('/api/port/auto_run/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            const data = await res.json();
+            if (data.auto_run_active !== undefined) {
+                updateAutoRunButton(data.auto_run_active);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    window.updatePageUI = function(active) {
+        const btn = document.getElementById('port-btn');
+        if (btn) btn.innerText = active ? 'ОСТАНОВИТЬ' : 'ЗАПУСТИТЬ';
+    };
+
+    window.initPortPage = function() {
+        window.loadModuleLogs('port');
+        const serverStatus = "{{ 'true' if active else 'false' }}";
+        
+        const dataElement = document.getElementById('port-data');
+        const autoRunStatus = dataElement ? dataElement.dataset.autoRunActive === 'true' : false;
+
+        const btn = document.getElementById('port-btn');
+        if (btn) btn.innerText = serverStatus === 'true' ? 'ОСТАНОВИТЬ' : 'ЗАПУСТИТЬ';
+
+        updateAutoRunButton(autoRunStatus);
+
+        setInterval(updateStats, 2000);
+    };
+
+    window.initPortPage();
+</script>
+{% endblock %}

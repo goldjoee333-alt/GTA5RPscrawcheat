@@ -1,0 +1,154 @@
+{% extends "layout.html" %} {% block content %}
+<div class="card">
+    <h2>🐄 Ферма (Коровы)</h2>
+    <div class="info-box" style="border-left-color: #ff0000;">
+        ℹ️ <strong>Функция:</strong> Автоматически нажимает A или D в мини-игре на ферме.
+    </div>
+
+    <div class="settings-group">
+        <!-- Кнопка автобега -->
+        <button class="button" id="auto-run-btn" onclick="toggleAutoRun()" style="width: 100%; margin-bottom: 8px;">
+            🚶 Автобег: ...
+        </button>
+
+        <!-- Кнопка авто E -->
+        <button class="button" id="auto-e-btn" onclick="toggleAutoE()" style="width: 100%; margin-bottom: 15px;">
+             Авто E: ...
+        </button>
+
+        <div class="input-group">
+            <label>Интервал авто E: <span id="auto-e-interval-v" style="color: #ff0000;">{{ settings.auto_e_interval|default(0.1) }}</span> сек</label>
+            <input type="range" id="auto-e-interval" min="0.05" max="1.0" step="0.05" value="{{ settings.auto_e_interval|default(0.1) }}" oninput="document.getElementById('auto-e-interval-v').innerText = this.value">
+        </div>
+
+        <div class="input-group">
+            <label>Задержка нажатия A/D: <span id="press-delay-v" style="color: #ff0000;">{{ settings.press_delay|default(0.3) }}</span> сек</label>
+            <input type="range" id="press-delay" min="0.1" max="1.0" step="0.05" value="{{ settings.press_delay|default(0.3) }}" oninput="document.getElementById('press-delay-v').innerText = this.value">
+        </div>
+
+        <button class="button" id="cow-btn" onclick="toggleCow()" style="background: linear-gradient(135deg, #ff0000 0%, #8b0000 100%);">
+            {{ 'ОСТАНОВИТЬ' if active else 'ЗАПУСТИТЬ' }}
+        </button>
+    </div>
+
+    <div class="stats-box" style="background: rgba(255, 0, 0, 0.1); border: 1px solid rgba(255, 0, 0, 0.3); padding: 15px; border-radius: 8px; margin-top: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: #ff0000; font-weight: bold;">🐄 Действий:</span>
+            <span id="counter-value" style="color: white; font-size: 1.5rem;">{{ counter }}</span>
+        </div>
+    </div>
+
+    <h2>📋 Логи</h2>
+    <div style="position: relative;">
+        <div id="log-container"></div>
+        <button onclick="sendLogsToTelegram()" class="floating-send-btn" title="Отправить в Telegram" style="color: #ff0000; border-color: rgba(255, 0, 0, 0.2);">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+    </div>
+</div>
+
+<!-- Скрытый элемент с данными для синхронизации состояния -->
+<div id="cow-data" 
+     data-auto-run-active="{{ 'true' if auto_run_active else 'false' }}"
+     data-auto-e-active="{{ 'true' if auto_e_active else 'false' }}"
+     style="display: none;"></div>
+
+<script>
+    // Функции для обновления кнопок
+    function updateAutoRunButton(state) {
+        const btn = document.getElementById('auto-run-btn');
+        if (btn) {
+            btn.style.background = state ? '#2ecc71' : '#8b0000';
+            btn.innerText = state ? '🚶 Автобег: ВКЛ' : '🚶 Автобег: ВЫКЛ';
+        }
+    }
+
+    function updateAutoEButton(state) {
+        const btn = document.getElementById('auto-e-btn');
+        if (btn) {
+            btn.style.background = state ? '#2ecc71' : '#8b0000';
+            btn.innerText = state ? '🍔 Авто E: ВКЛ' : '🍔 Авто E: ВЫКЛ';
+        }
+    }
+
+    function toggleCow() {
+        const settings = {
+            press_delay: parseFloat(document.getElementById('press-delay').value),
+            auto_e_interval: parseFloat(document.getElementById('auto-e-interval').value)
+        };
+
+        fetch('/api/cow/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    settings: settings
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.active !== undefined) {
+                    const btn = document.getElementById('cow-btn');
+                    btn.innerText = data.active ? 'ОСТАНОВИТЬ' : 'ЗАПУСТИТЬ';
+                }
+            })
+            .catch(err => console.error('Ошибка:', err));
+    }
+
+    function toggleAutoRun() {
+        fetch('/api/cow/auto_run/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.auto_run_active !== undefined) {
+                    updateAutoRunButton(data.auto_run_active);
+                }
+            })
+            .catch(err => console.error('Ошибка:', err));
+    }
+
+    function toggleAutoE() {
+        fetch('/api/cow/auto_e/toggle', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.auto_e_active !== undefined) {
+                    updateAutoEButton(data.auto_e_active);
+                }
+            })
+            .catch(err => console.error('Ошибка:', err));
+    }
+
+    function updateCounter() {
+        fetch('/api/cow/stats')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('counter-value').textContent = data.counter;
+            })
+            .catch(err => console.error('Ошибка обновления счетчика:', err));
+    }
+
+    window.loadModuleLogs('cow');
+    setInterval(updateCounter, 2000);
+
+    // Инициализация: читаем начальные состояния из data-атрибутов
+    const dataElement = document.getElementById('cow-data');
+    if (dataElement) {
+        const autoRunStatus = dataElement.dataset.autoRunActive === 'true';
+        const autoEStatus = dataElement.dataset.autoEActive === 'true';
+        updateAutoRunButton(autoRunStatus);
+        updateAutoEButton(autoEStatus);
+    }
+</script>
+{% endblock %}
